@@ -3,6 +3,7 @@ import csv
 import functools
 import glob
 import os
+import random
 # from time import clock_settime
 from collections import namedtuple
 
@@ -14,7 +15,15 @@ import torch.cuda
 from torch.utils.data import Dataset
 
 from utill.util import XyzTuple, xyz2irc
+from utill.disk import getCache
 
+from utill.logconf import logging
+log = logging.getLogger(__name__)
+# log.setLevel(logging.WARN)
+# log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
+
+raw_cache = getCache('combining_data_raw')
 
 CandidateTuple = namedtuple('CandidateTuple', ['isNodule', 'diameter_mm', 'series_uid', 'center_xyz'])
 
@@ -130,7 +139,7 @@ def getCt(series_uid):
     return Ct(series_uid)
 
 
-# @raw_cache.memoize(typed=True)
+@raw_cache.memoize(typed=True)
 def getCtRawCandidate(series_uid, center_xyz, width_irc):
     ct = getCt(series_uid)
     ct_chunk, center_irc = ct.getCtChunk(center_xyz, width_irc)
@@ -139,7 +148,7 @@ def getCtRawCandidate(series_uid, center_xyz, width_irc):
 
 class LunaDataset(Dataset):
 
-    def __init__(self, val_step=0, isValset=None, series_uid=None):
+    def __init__(self, val_step=0, isValset=None, series_uid=None, sortby_str='random'):
         self.candidates_list = copy.copy(getCandidatesList())
 
         if series_uid:
@@ -153,6 +162,21 @@ class LunaDataset(Dataset):
         elif val_step > 0:
             del self.candidates_list[::val_step]
             assert self.candidates_list
+
+        if sortby_str == 'random':
+            random.shuffle(self.candidates_list)
+        elif sortby_str == 'series_uid':
+            self.candidates_list.sort(key=lambda x: (x.series_uid, x.center_xyz))
+        elif sortby_str == 'label_and_size':
+            pass
+        else:
+            raise Exception("Unknown sort: " + repr(sortby_str))
+
+        log.info("{!r}: {} {} samples".format(
+            self,
+            len(self.candidates_list),
+            "validation" if isValset else "training",
+        ))
 
     def __len__(self):
         return len(self.candidates_list)

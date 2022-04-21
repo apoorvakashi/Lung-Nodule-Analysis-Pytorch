@@ -1,4 +1,5 @@
 import matplotlib
+matplotlib.use('nbagg')
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -95,3 +96,4 @@ def showCandidate(series_uid, batch_index = None, **kwargs):
 
 
     print(series_uid, batch_index, bool(isNodule_tensor[1]), positive_index_list)
+    # print(ct_arr.shape)

@@ -56,6 +56,12 @@ class LunaTrainingApp:
             type=int,
         )
 
+        parser.add_argument('--balanced',
+            help="Balance the training data to half positive, half negative.",
+            action='store_true',
+            default=False
+        )        
+
         parser.add_argument('--tb-prefix',
             default='classification',
             help="Data prefix to use for Tensorboard run.",
@@ -103,6 +109,7 @@ class LunaTrainingApp:
         train_ds = LunaDataset(
             val_step=10,
             isValset=False,
+            ratio_int= int(self.cli_args.balanced)
             )
 
         batch_size = self.cli_args.batch_size
@@ -176,9 +183,11 @@ class LunaTrainingApp:
             self.train_writer.close()
             self.val_writer.close()
 
+
     def doTraining(self, epoch_index, train_dl):
         self.model.train()
-        
+        train_dl.dataset.shuffleSamples()
+
         trainMetrics_gpu = torch.zeros(
             METRICS_SIZE,
             len(train_dl.dataset),
@@ -208,8 +217,8 @@ class LunaTrainingApp:
             # if epoch_ndx == 1 and batch_ndx == 0:
             #     with torch.no_grad():
             #         model = LunaModel()
-            #         self.trn_writer.add_graph(model, batch_tup[0], verbose=True)
-            #         self.trn_writer.close()
+            #         self.train_writer.add_graph(model, batch_tup[0], verbose=True)
+            #         self.train_writer.close()
 
 
         self.totalTrainingSamples_count += len(train_dl.dataset)
@@ -288,8 +297,11 @@ class LunaTrainingApp:
         neg_count = int(negLabel_mask.sum())
         pos_count = int(posLabel_mask.sum())
 
-        neg_correct = int((negLabel_mask & negPred_mask).sum())
-        pos_correct = int((posLabel_mask & posPred_mask).sum())
+        trueNeg_count = neg_correct = int((negLabel_mask & negPred_mask).sum())
+        truePos_count = pos_correct = int((posLabel_mask & posPred_mask).sum())
+
+        falsePos_count = neg_count - neg_correct
+        falseNeg_count = pos_count - pos_correct
 
         metrics_dict = {}
         metrics_dict['loss/all'] = \
@@ -305,9 +317,21 @@ class LunaTrainingApp:
         metrics_dict['correct/neg'] = neg_correct / np.float32(neg_count) * 100
         metrics_dict['correct/pos'] = pos_correct / np.float32(pos_count) * 100
 
+
+        precision = metrics_dict['pr/precision'] = \
+            truePos_count / np.float32(truePos_count + falsePos_count)
+        recall    = metrics_dict['pr/recall'] = \
+            truePos_count / np.float32(truePos_count + falseNeg_count)
+
+        metrics_dict['pr/f1_score'] = \
+            2 * (precision * recall) / (precision + recall)
+
         log.info(
             ("E{} {:8} {loss/all:.4f} loss, "
                  + "{correct/all:-5.1f}% correct, "
+                 + "{pr/precision:.4f} precision, "
+                 + "{pr/recall:.4f} recall, "
+                 + "{pr/f1_score:.4f} f1 score"
             ).format(
                 epoch_index,
                 mode_str,

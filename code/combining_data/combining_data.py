@@ -12,6 +12,7 @@ import numpy as np
 
 import torch
 import torch.cuda
+import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 from utill.util import XyzTuple, xyz2irc
@@ -148,8 +149,9 @@ def getCtRawCandidate(series_uid, center_xyz, width_irc):
 
 class LunaDataset(Dataset):
 
-    def __init__(self, val_step=0, isValset=None, series_uid=None, sortby_str='random'):
+    def __init__(self, val_step=0, isValset=None, series_uid=None, sortby_str='random', ratio_int =0):
         self.candidates_list = copy.copy(getCandidatesList())
+        self.ratio_int = ratio_int
 
         if series_uid:
             self.candidates_list = [x for x in self.candidates_list if x.series_uid == series_uid]
@@ -172,17 +174,56 @@ class LunaDataset(Dataset):
         else:
             raise Exception("Unknown sort: " + repr(sortby_str))
 
+        self.negative_list = [
+            nt for nt in self.candidates_list if not nt.isNodule
+        ]
+        self.pos_list = [
+            nt for nt in self.candidates_list if nt.isNodule
+        ]
+
         log.info("{!r}: {} {} samples".format(
             self,
             len(self.candidates_list),
             "validation" if isValset else "training",
         ))
 
+        log.info("{!r}: {} {} samples, {} neg, {} pos, {} ratio".format(
+        self,
+        len(self.candidates_list),
+        "validation" if isValset else "training",
+        len(self.negative_list),
+        len(self.pos_list),
+        '{}:1'.format(self.ratio_int) if self.ratio_int else 'unbalanced'
+    ))
+
+    def shuffleSamples(self):
+        if self.ratio_int:
+            random.shuffle(self.negative_list)
+            random.shuffle(self.pos_list)
+
     def __len__(self):
-        return len(self.candidates_list)
+        if self.ratio_int:
+            return 23000
+        else:
+            return len(self.candidates_list)
 
     def __getitem__(self, index):
-        candidate_tuple = self.candidates_list[index]
+
+        if self.ratio_int:
+            pos_index = index // (self.ratio_int + 1)
+
+            if index % (self.ratio_int + 1):
+                neg_index = index - 1 - pos_index
+                neg_index %= len(self.negative_list)
+                candidate_tuple = self.negative_list[neg_index]
+
+            else:
+                pos_index %= len(self.pos_list)
+                candidate_tuple = self.pos_list[pos_index]
+
+        else:
+            candidate_tuple = self.candidates_list[index]
+            
         width_irc = (32, 48, 48)
 
         candidate_arr, center_irc = getCtRawCandidate(

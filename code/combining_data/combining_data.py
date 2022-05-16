@@ -4,6 +4,7 @@ import functools
 import glob
 import os
 import random
+import math
 # from time import clock_settime
 from collections import namedtuple
 
@@ -139,7 +140,12 @@ class Ct:
 def getCt(series_uid):
     return Ct(series_uid)
 
+"""Generate raw candidate using cache
 
+    Returns:
+    3D Ct chunk containing nodule,
+    Nodule Center Coordinate
+"""
 @raw_cache.memoize(typed=True)
 def getCtRawCandidate(series_uid, center_xyz, width_irc):
     ct = getCt(series_uid)
@@ -147,11 +153,109 @@ def getCtRawCandidate(series_uid, center_xyz, width_irc):
     return ct_chunk, center_irc
 
 
+"""Get the Augmented Candidate by applying
+    mirroring,
+    shifting by an offset,
+    scaling,
+    rotating(only along x and y axes),
+    adding noise.
+
+    Resample the candidate using affine_grid and grid_sample 
+
+    Returns:
+    Augmented Ct tensor and
+    Nodule Center coordinate
+"""
+def getAugmenCandidate(augmen_dict,
+    series_uid,
+    center_xyz,
+    width_irc,
+    use_cache = True
+    ):
+    if use_cache:
+        ct_chunk, center_irc = getCtRawCandidate(series_uid, center_xyz, width_irc)
+
+    else:
+        ct = getCt(series_uid)
+        ct_chunk, center_irc = ct.getCtChunk(center_xyz, width_irc)
+
+    ct_tensor = torch.tensor(ct_chunk).unsqueeze(0).unsqueeze(0).to(torch.float32)
+
+    transform_tensor = torch.eye(4)
+
+    for i in range(3):
+        if 'flip' in augmen_dict:
+            if random.random() > 0.5:
+                transform_tensor[i,i] *= -1
+
+        if 'offset' in augmen_dict:
+            offset_val = augmen_dict['offset']
+            random_val = (random.random() * 2 - 1)
+            transform_tensor[i,3] = offset_val * random_val
+
+        if 'scale' in augmen_dict:
+            scale_val = augmen_dict['scale']
+            random_val = (random.random() * 2 - 1)
+            transform_tensor[i,i] *= 1.0 + scale_val*random_val
+
+    if 'rotate' in augmen_dict:
+        angle_rad = random.random() * math.pi * 2
+        s = math.sin(angle_rad)
+        c = math.cos(angle_rad)
+
+        rotation_tensor = torch.tensor([
+            [c, -s, 0, 0],
+            [s, c, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1],
+        ])
+
+        transform_tensor @= rotation_tensor
+
+    affine_tensor = F.affine_grid(
+        transform_tensor[:3].unsqueeze(0).to(torch.float32),
+        ct_tensor.size(),
+        align_corners=False
+    )
+
+    augmented_chunk = F.grid_sample(
+        ct_tensor,
+        affine_tensor,
+        padding_mode='border',
+        align_corners=False,
+        ).to('cpu')
+
+    if 'noise' in augmen_dict:
+        noise_tensor = torch.randn_like(augmented_chunk)
+        noise_tensor *= augmen_dict['noise']
+
+        augmented_chunk += noise_tensor
+
+
+    return augmented_chunk[0], center_irc
+
 class LunaDataset(Dataset):
 
-    def __init__(self, val_step=0, isValset=None, series_uid=None, sortby_str='random', ratio_int =0):
-        self.candidates_list = copy.copy(getCandidatesList())
+    def __init__(self, val_step=0,
+                isValset=None,
+                series_uid=None,
+                sortby_str='random',
+                ratio_int =0,
+                augmen_dict=None,
+                candidates_list=None,
+            ):
+
+
         self.ratio_int = ratio_int
+        self.augmen_dict = augmen_dict
+
+        if candidates_list:
+            self.candidates_list = copy.copy(candidates_list)
+            self.use_cache = False
+        else:
+            self.candidates_list = copy.copy(getCandidatesList())
+            self.use_cache = True
+
 
         if series_uid:
             self.candidates_list = [x for x in self.candidates_list if x.series_uid == series_uid]
@@ -226,15 +330,36 @@ class LunaDataset(Dataset):
             
         width_irc = (32, 48, 48)
 
-        candidate_arr, center_irc = getCtRawCandidate(
-            candidate_tuple.series_uid,
-            candidate_tuple.center_xyz,
-            width_irc,
-        )
+        if self.augmen_dict:
+            candidate_tensor, center_irc = getAugmenCandidate(
+                self.augmen_dict,
+                candidate_tuple.series_uid,
+                candidate_tuple.center_xyz,
+                width_irc,
+                self.use_cache
+                )
 
-        candidate_tensor = torch.from_numpy(candidate_arr)
-        candidate_tensor = candidate_tensor.to(torch.float32)
-        candidate_tensor = candidate_tensor.unsqueeze(0)
+        elif self.use_cache:
+            candidate_arr, center_irc = getCtRawCandidate(
+                candidate_tuple.series_uid,
+                candidate_tuple.center_xyz,
+                width_irc,
+            )
+
+            candidate_tensor = torch.from_numpy(candidate_arr)
+            candidate_tensor = candidate_tensor.to(torch.float32)
+            candidate_tensor = candidate_tensor.unsqueeze(0)
+
+        else:
+            ct = getCt(candidate_tuple.series_uid)
+            candidate_arr, center_irc = ct.getCtChunk(
+                candidate_tuple.center_xyz,
+                width_irc,
+            )
+
+            candidate_tensor = torch.from_numpy(candidate_arr)
+            candidate_tensor = candidate_tensor.to(torch.float32)
+            candidate_tensor = candidate_tensor.unsqueeze(0)            
 
         isNodule_tensor = torch.tensor([not candidate_tuple.isNodule, candidate_tuple.isNodule], dtype=torch.long)
 

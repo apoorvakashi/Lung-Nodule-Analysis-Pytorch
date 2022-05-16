@@ -60,6 +60,42 @@ class LunaTrainingApp:
             help="Balance the training data to half positive, half negative.",
             action='store_true',
             default=False
+        )
+
+        parser.add_argument('--augmented',
+            help="Augment the training data.",
+            action='store_true',
+            default=False,
+        )
+
+        parser.add_argument('--augment-flip',
+            help="Augment the training data by randomly flipping the data left-right, up-down, and front-back.",
+            action='store_true',
+            default=False,
+        )
+
+        parser.add_argument('--augment-offset',
+            help="Augment the training data by randomly offsetting the data slightly along the X and Y axes.",
+            action='store_true',
+            default=False,
+        )
+
+        parser.add_argument('--augment-scale',
+            help="Augment the training data by randomly increasing or decreasing the size of the candidate.",
+            action='store_true',
+            default=False,
+        )
+
+        parser.add_argument('--augment-rotate',
+            help="Augment the training data by randomly rotating the data around the head-foot axis.",
+            action='store_true',
+            default=False,
+        )
+
+        parser.add_argument('--augment-noise',
+            help="Augment the training data by randomly adding noise to the data.",
+            action='store_true',
+            default=False,
         )        
 
         parser.add_argument('--tb-prefix',
@@ -79,6 +115,18 @@ class LunaTrainingApp:
         self.train_writer = None
         self.val_writer = None
         self.totalTrainingSamples_count = 0
+
+        self.augmentation_dict = {}
+        if self.cli_args.augmented or self.cli_args.augment_flip:
+            self.augmentation_dict['flip'] = True
+        if self.cli_args.augmented or self.cli_args.augment_offset:
+            self.augmentation_dict['offset'] = 0.1
+        if self.cli_args.augmented or self.cli_args.augment_scale:
+            self.augmentation_dict['scale'] = 0.2
+        if self.cli_args.augmented or self.cli_args.augment_rotate:
+            self.augmentation_dict['rotate'] = True
+        if self.cli_args.augmented or self.cli_args.augment_noise:
+            self.augmentation_dict['noise'] = 25.0
 
         self.use_cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if self.use_cuda else "cpu")
@@ -109,7 +157,8 @@ class LunaTrainingApp:
         train_ds = LunaDataset(
             val_step=10,
             isValset=False,
-            ratio_int= int(self.cli_args.balanced)
+            ratio_int= int(self.cli_args.balanced),
+            augmen_dict=self.augmentation_dict,
             )
 
         batch_size = self.cli_args.batch_size
@@ -253,7 +302,12 @@ class LunaTrainingApp:
             return valMetrics_gpu.to('cpu')
 
     
-    def computeBatchLoss(self, batch_index, batch_tuple, batch_size, metrics_gpu):
+    def computeBatchLoss(self,
+        batch_index,
+        batch_tuple,
+        batch_size, 
+        metrics_gpu
+    ):
 
         input_tensor, label_tensor, _series_list, _center_list = batch_tuple
 
@@ -280,7 +334,12 @@ class LunaTrainingApp:
         return loss_gpu.mean()
 
 
-    def logMetrics(self, epoch_index, mode_str, metrics_tensor, classThreshold = 0.5):
+    def logMetrics(self,
+        epoch_index,
+        mode_str, 
+        metrics_tensor, 
+        classThreshold = 0.5
+    ):
         
         self.initTensorboardWriters()
         log.info("E{} {}".format(
@@ -320,7 +379,7 @@ class LunaTrainingApp:
 
         precision = metrics_dict['pr/precision'] = \
             truePos_count / np.float32(truePos_count + falsePos_count)
-        recall    = metrics_dict['pr/recall'] = \
+        recall = metrics_dict['pr/recall'] = \
             truePos_count / np.float32(truePos_count + falseNeg_count)
 
         metrics_dict['pr/f1_score'] = \
@@ -338,6 +397,7 @@ class LunaTrainingApp:
                 **metrics_dict,
             )
         )
+        
         log.info(
             ("E{} {:8} {loss/neg:.4f} loss, "
                  + "{correct/neg:-5.1f}% correct ({neg_correct:} of {neg_count:})"
@@ -349,6 +409,7 @@ class LunaTrainingApp:
                 **metrics_dict,
             )
         )
+
         log.info(
             ("E{} {:8} {loss/pos:.4f} loss, "
                  + "{correct/pos:-5.1f}% correct ({pos_correct:} of {pos_count:})"

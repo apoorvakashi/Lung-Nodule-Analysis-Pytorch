@@ -130,6 +130,7 @@ def enumerateWithEstimate(
 
     start_ts = time.time()
 
+
     for (current_index, item) in enumerate(iter):
         yield (current_index, item)
 

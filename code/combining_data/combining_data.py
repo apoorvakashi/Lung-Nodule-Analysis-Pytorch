@@ -312,7 +312,7 @@ class LunaDataset(Dataset):
             return len(self.candidates_list)
 
     def __getitem__(self, index):
-
+        print(1)
         if self.ratio_int:
             pos_index = index // (self.ratio_int + 1)
 

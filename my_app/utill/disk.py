@@ -6,7 +6,7 @@ from diskcache.core import io, MODE_BINARY
 from io import BytesIO
 
 
-from utill.logconf import logging
+from my_app.utill.logconf import logging
 log = logging.getLogger(__name__)
 # log.setLevel(logging.WARN)
 log.setLevel(logging.INFO)

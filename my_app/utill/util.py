@@ -7,7 +7,7 @@ import time
 # import torch
 import numpy as np
 
-from utill.logconf import logging
+from my_app.utill.logconf import logging
 log = logging.getLogger(__name__)
 # log.setLevel(logging.WARN)
 # log.setLevel(logging.INFO)

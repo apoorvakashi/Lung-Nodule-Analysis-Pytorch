@@ -16,10 +16,10 @@ import torch.cuda
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from utill.util import XyzTuple, xyz2irc
-from utill.disk import getCache
+from my_app.utill.util import XyzTuple, xyz2irc
+from my_app.utill.disk import getCache
 
-from utill.logconf import logging
+from my_app.utill.logconf import logging
 log = logging.getLogger(__name__)
 # log.setLevel(logging.WARN)
 # log.setLevel(logging.INFO)
@@ -372,3 +372,4 @@ class LunaDataset(Dataset):
 
 # LunaDataset()[0]
 
+getCandidatesList()

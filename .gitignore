@@ -3,3 +3,8 @@
 *.pyc
 /code/data/**
 /code/runs/**
+
+/my_app/data/**
+/my_app/runs/**
+
+*checkpoint.ipynb

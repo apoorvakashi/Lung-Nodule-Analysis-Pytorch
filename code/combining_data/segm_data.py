@@ -331,7 +331,7 @@ class TrainingLuna2dSegmentationDataset(Luna2dSegmentationDataset):
         self.ratio_int = 2
 
     def __len__(self):
-        return 50000
+        return 500000
 
     def shuffleSamples(self):
         random.shuffle(self.candidates_list)

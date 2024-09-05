@@ -13,6 +13,15 @@ log = logging.getLogger(__name__)
 # log.setLevel(logging.INFO)
 log.setLevel(logging.DEBUG)
 
+"""
+To go from voxel indices to coordinates, we need to follow these four steps in order:
+1 Flip the coordinates from IRC to CRI, to align with XYZ.
+2 Scale the indices with the voxel sizes.
+3 Matrix-multiply with the directions matrix, using @ in Python.
+4 Add the offset for the origin.
+
+"""
+
 IrcTuple = collections.namedtuple('IrcTuple', ['index', 'row', 'col'])
 XyzTuple = collections.namedtuple('XyzTuple', ['x', 'y', 'z'])
 

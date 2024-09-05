@@ -29,12 +29,26 @@ raw_cache = getCache('combining_data_raw')
 
 CandidateTuple = namedtuple('CandidateTuple', ['isNodule', 'diameter_mm', 'series_uid', 'center_xyz'])
 
+"""
+Returns a sorted list od Candidate Tuples with:
 
+Nodule Flag indicating if it is a nodule or non-nodule - 'isNodule_bool'
+Diameter of the nodule - 'diameter_mm' (0.0 if no matching records are found in annotations.csv and candidates.csv
+Identifier for which CT scan the nodule belongs to - 'series_uid' 
+Array coordinates of the center of the nodule - 'center_xyz'
+
+We sort the candidates list so that we can get a representative split for both train and validation sets.
+We will take every Nth sample for validation.
+
+"""
 @functools.lru_cache(1)
 def getCandidatesList(reqOnDisk = True):
 
     mhdPath_list = glob.glob('../data/subset*/*.mhd')
     # print(mhdPath_list)
+    # We construct a set with all series_uids that are present on disk.
+    # This will let us use the data, even if we haven't downloaded all of
+    # the subsets yet.
     presentOnDisk_set = {os.path.split(path)[-1][:-4] for path in mhdPath_list}
 
     diameter_dict = {}
@@ -59,6 +73,12 @@ def getCandidatesList(reqOnDisk = True):
             isNodule = bool(int(row[4]))
             candidatesCoord_xyz = tuple([float(x) for x in row[1:4]])
 
+            #For each of the candidate entries for a given series_uid, we loop through the annota- tions we collected earlier
+            #for the same series_uid and see if the two coordinates are close enough to consider them the same nodule. If they
+            #are, great! Now we have diam- eter information for that nodule. If we don’t find a match, that’s fine; we’ll just
+            #treat the nodule as having a 0.0 diameter. Since we’re only using this information to get a good spread of nodule 
+            #sizes in our training and validation sets, having incorrect diam- eter sizes for some nodules shouldn’t be a problem.
+
             candidatesDiameter_mm = 0.0
             for annot_tuple in diameter_dict.get(series_uid, []):
                 annotationsCoord_xyz, annotationsDiameter_mm = annot_tuple
@@ -79,10 +99,21 @@ def getCandidatesList(reqOnDisk = True):
                 candidatesCoord_xyz
                 ))
 
+    #This means we have all of the actual nodule samples starting with the largest first, followed by all of the
+    #non-nodule samples (which don’t have nodule size information).
     candidates_list.sort(reverse=True)
 
     return candidates_list
 
+
+"""
+Uses SimpleITK to parse the bits on disk.
+Clips the CT array based on relevant HU values.
+
+getCtChunk:
+Returns the CT chunk that is cropped using Origin , Spacing and Direction data from the .mhd file.
+
+"""
 
 class Ct:
 
@@ -135,6 +166,8 @@ class Ct:
 
         return ct_chunk, center_irc
 
+#we’re caching the getCt return value in memory so that we can repeatedly ask for the same Ct instance
+#without having to reload all of the data from disk.
 
 @functools.lru_cache(1, typed=True)
 def getCt(series_uid):
@@ -234,6 +267,24 @@ def getAugmenCandidate(augmen_dict,
 
     return augmented_chunk[0], center_irc
 
+"""
+Subclass of the Dataset class
+
+Each Ct instance represents hundreds of different samples that we can use to train our model or validate
+its effectiveness. Our LunaDataset class will normalize those samples, flattening each CT’s nodules into
+a single collection from which samples can be retrieved without regard for which Ct instance the sample
+originates from.
+
+__getitem__ method manipulates the data into the proper data types and required array dimensions
+that will be expected by downstream code.
+
+We allow for the Dataset to partition out 1/Nth of the data into a subset used for validating
+the model based on the value of the 'isValSet _bool' argument.
+
+Returns the Candidates Tuples as Tensors.
+
+"""
+
 class LunaDataset(Dataset):
 
     def __init__(self, val_step=0,
@@ -327,7 +378,8 @@ class LunaDataset(Dataset):
 
         else:
             candidate_tuple = self.candidates_list[index]
-            
+
+        #The return value candidate_arr has shape (32,48,48); the axes are depth, height, and width.
         width_irc = (32, 48, 48)
 
         if self.augmen_dict:

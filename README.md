@@ -78,7 +78,102 @@ This includes functions and classes to handle data parsing, augmentation, and lo
   - `center_irc` (torch tensor) - Center of the candidate in array coordinates.
 -------------------------
 
-  ## Classification
+## Classification
+
+Overview : This module is designed for the training of a 3D Convolutional Neural Network (CNN) model, specifically the `LunaModel`, which is implemented for binary classification tasks. The module handles the initialization of the model, optimizer, data loaders, and training loops. It also integrates TensorBoard for visualization and monitoring during training and validation.
+
+---
+
+### LunaModel Class
+`LunaModel` is a 3D CNN model built with four convolutional blocks (`LunaBlock`), followed by a linear layer and a softmax activation function for classification.
+
+#### Input:
+- `inp_channels` (int): Number of input channels for the first convolutional layer. Default is `1`.
+- `conv_channels` (int): Number of output channels for the first convolutional layer. This value doubles after each block. Default is `8`.
+
+#### Output:
+- `linear_output` (tensor): The raw output (logits) from the final linear layer.
+- `act_output` (tensor): The softmax activated output, representing class probabilities.
+
+#### Methods:
+- `forward(input_batch)`: Forward pass through the network.
+  - **Input**: `input_batch` (tensor) - The input tensor of shape `(batch_size, channels, depth, height, width)`.
+  - **Output**: Returns a tuple containing `linear_output` and `act_output`.
+- `_init_weights()`: Initializes the weights of the model using He initialization (Kaiming normal) for layers like `Conv3d` and `Linear`.
+
+---
+
+### LunaBlock Class
+
+`LunaBlock` is a basic building block of the `LunaModel`, consisting of two 3D convolutional layers, each followed by a ReLU activation function, and a max-pooling layer.
+
+---
+
+### LunaTrainingApp Class
+
+`LunaTrainingApp` handles the overall training process, including data loading, model initialization, training, validation, and logging.
+
+#### Input:
+- `sys_argv` (list of str, optional): Command-line arguments passed to the script. If `None`, uses `sys.argv`.
+
+#### Methods:
+- `__init__(sys_argv=None)`: Initializes the training application.
+- `initModel()`: Initializes and returns the `LunaModel`.
+  - **Output**: Returns the initialized model.
+- `initOptimizer()`: Initializes the optimizer (SGD by default).
+  - **Output**: Returns the optimizer.
+- `initTrainDL()`: Initializes the training data loader.
+  - **Output**: Returns the `DataLoader` for training data.
+- `initValDL()`: Initializes the validation data loader.
+  - **Output**: Returns the `DataLoader` for validation data.
+- `initTensorboardWriters()`: Initializes TensorBoard writers for training and validation.
+- `main()`: Main method for running the training and validation loops.
+- `doTraining(epoch_index, train_dl)`: Executes the training loop for one epoch.
+  - **Input**: `epoch_index` (int), `train_dl` (DataLoader) - The current epoch index and the training data loader.
+  - **Output**: Returns the training metrics tensor.
+- `doValidation(epoch_index, val_dl)`: Executes the validation loop for one epoch.
+  - **Input**: `epoch_index` (int), `val_dl` (DataLoader) - The current epoch index and the validation data loader.
+  - **Output**: Returns the validation metrics tensor.
+- `computeBatchLoss(batch_index, batch_tuple, batch_size, metrics_gpu)`: Computes the loss for a batch during training or validation.
+  - **Input**: `batch_index` (int), `batch_tuple` (tuple), `batch_size` (int), `metrics_gpu` (tensor).
+  - **Output**: Returns the mean loss for the batch.
+- `logMetrics(epoch_index, mode_str, metrics_tensor, classThreshold=0.5)`: Logs training or validation metrics to TensorBoard.
+  - **Input**: `epoch_index` (int), `mode_str` (str), `metrics_tensor` (tensor), `classThreshold` (float).
+  
+---
+
+### Command-Line Arguments
+
+#### Arguments:
+- `--num-workers` (int): Number of worker processes for data loading. Default is `8`.
+- `--batch-size` (int): Batch size for training and validation. Default is `32`.
+- `--epochs` (int): Number of epochs to train for. Default is `1`.
+- `--balanced` (bool): If set, balances the training data. Default is `False`.
+- `--augmented` (bool): Enables data augmentation. Default is `False`.
+- `--augment-flip` (bool): Augments data by randomly flipping. Default is `False`.
+- `--augment-offset` (bool): Augments data by offsetting along X and Y axes. Default is `False`.
+- `--augment-scale` (bool): Augments data by scaling. Default is `False`.
+- `--augment-rotate` (bool): Augments data by rotating around the head-foot axis. Default is `False`.
+- `--augment-noise` (bool): Augments data by adding noise. Default is `False`.
+- `--tb-prefix` (str): Prefix for TensorBoard logs. Default is `classification`.
+- `comment` (str): Suffix for TensorBoard logs. Default is `lcd-pt`.
+
+---
+
+### TensorBoard Integration
+
+The module integrates TensorBoard for tracking training progress, including metrics like loss, accuracy, precision, recall, and F1 score. It also logs histograms of predictions and precision-recall curves.
+
+---
+
+### Example Usage
+
+To train the model using the script, run the following command:
+
+```bash
+python training.py --batch-size 64 --epochs 10 --augmented --augment-flip
+```
+
 
 --------------------------
 

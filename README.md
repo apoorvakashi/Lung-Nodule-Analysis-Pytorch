@@ -1,11 +1,14 @@
 # LUNG NODULE ANALYSIS - PYTORCH 
 <img width="753" alt="Screen Shot 2024-09-05 at 5 39 16 PM" src="https://github.com/user-attachments/assets/4bc2d536-c997-4450-b8f8-47596d335f65">
 
+# MODULES
+  1. [Combining Data](#combining-data)
+  2. [Classification](#classification)
+  3. [Segmentation](#segmentation)
 
-# Modules
 ____________________________________________________________________________________________________
 
-## 1. Combining Data
+## Combining Data
 
 The raw CT scan data has to be loaded into a form that can be used with PyTorch. The CT data comes in two files: a .mhd file containing metadata header information, and a .raw file containing the raw bytes that make up the 3D array. Specific CT scans are identified using the series instance UID (series_uid) assigned when the CT scan was created. The coordinates are then to be transformed from the millimeter- based coordinate system (X, Y, Z) they’re expressed in, to the voxel-address-based coordinate system (I, R, C) used to take array slices from the CT scan data.
 
@@ -73,8 +76,13 @@ This includes functions and classes to handle data parsing, augmentation, and lo
   - `isNodule_tensor` (torch tensor) - Tensor indicating if the candidate is a nodule.
   - `series_uid` (str) - Identifier for the CT scan series.
   - `center_irc` (torch tensor) - Center of the candidate in array coordinates.
+-------------------------
 
+  ## Classification
 
-  
+--------------------------
+
+  ## Segmentation
+
 
 

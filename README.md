@@ -177,7 +177,100 @@ python training.py --batch-size 64 --epochs 10 --augmented --augment-flip
 
 --------------------------
 
-  ## Segmentation
+## Segmentation
+This file implements a structured approach to perform pixel-level segmentation of lung CT scans. It combines a UNet-based model with data augmentation and mask processing techniques to improve the accuracy of lung region segmentation. By handling the augmentation on the GPU and refining masks through various operations, the module ensures efficient and precise lung segmentation. The results are crucial for downstream tasks like detecting lung nodules or analyzing lung health.
+
+## Why This Approach?
+
+- **Lung Segmentation** is vital in medical imaging to focus on lung regions for analysis, especially in tasks like nodule detection. Accurate segmentation ensures that models concentrate on relevant areas of the scan.
+- **Data Augmentation** improves model generalization by introducing variations in the input data, preventing overfitting.
+- **Mask Processing** refines the model’s predictions to produce clean and accurate segmentation masks, crucial in medical imaging where precision is key.
+
+---
+
+## Class Breakdown
+
+### `UNetWrapper`
+
+This class encapsulates a UNet architecture and adds preprocessing (BatchNorm) and postprocessing (Sigmoid activation) for binary lung mask segmentation.
+
+- **Purpose**: To segment lung regions from CT scan slices using a UNet model.
+  
+#### `__init__`
+- **Input**:  
+  - `kwargs`: UNet configuration, including the number of input channels (`in_channels`).
+- **Output**:  
+  - Initializes the UNet model with batch normalization and custom weight initialization.
+
+#### `forward`
+- **Input**:  
+  - `input_batch`: A batch of CT scan images (shape: `[batch_size, channels, height, width]`).
+- **Output**:  
+  - Sigmoid-activated segmentation mask indicating the probability of each pixel being part of the lung.
+
+---
+
+### `SegmentationAugmentation`
+
+This class handles various augmentations like flipping, scaling, rotation, and adding noise. The augmentations are applied to both the input images and their corresponding label masks to make the model robust.
+
+- **Purpose**: To augment training data, improving the model’s ability to generalize to unseen data.
+
+#### `__init__`
+- **Input**:  
+  - Augmentation parameters (`flip`, `offset`, `scale`, `rotate`, `noise`).
+
+#### `forward`
+- **Input**:  
+  - `input_g`: Input image tensor.
+  - `label_g`: Corresponding label tensor (lung masks).
+- **Output**:  
+  - `augmented_input_g`: Augmented images.
+  - `augmented_label_g`: Augmented masks, transformed consistently with the images.
+
+---
+
+### `SegmentationMask`
+
+This class refines segmentation masks using operations such as erosion, dilation, and cavity filling. These operations ensure that the lung masks are smooth, complete, and accurate, addressing common issues in raw mask outputs.
+
+- **Purpose**: To refine lung segmentation masks using morphological operations for higher accuracy.
+
+#### `__init__`
+- **Output**:  
+  - Initializes circular convolution layers for use in mask operations like erosion and dilation.
+
+#### `erode` / `deposit`
+- **Input**:  
+  - `input_mask`: Input mask tensor.
+  - `radius`: Radius of the circular kernel used for erosion or dilation.
+  - `threshold`: Threshold for applying erosion or dilation.
+- **Output**:  
+  - Eroded or dilated mask.
+
+#### `fill_cavity`
+- **Input**:  
+  - `input_mask`: Input mask tensor.
+- **Output**:  
+  - Mask with filled cavities, ensuring that all regions within the lung are segmented.
+
+#### `forward`
+- **Input**:  
+  - `input_g`: Input image tensor.
+  - `raw_pos_g`: Raw mask tensor.
+- **Output**:  
+  - `label_g`: Refined positive mask.
+  - `neg_g`: Negative mask (non-lung regions).
+  - `pos_g`: Positive mask (lung regions).
+  - `lung_mask`: Final lung mask.
+  - `mask_dict`: Dictionary containing all intermediate masks (`dense_mask`, `air_mask`, `candidate_mask`, etc.).
+
+---
+
+## Summary
+
+This module brings together a UNet-based architecture, data augmentation, and mask processing to create an efficient and accurate lung segmentation system. It allows the model to generalize across different datasets while ensuring precision in segmentation, which is crucial for medical imaging tasks like lung nodule detection or disease diagnosis.
+
 
 
 
